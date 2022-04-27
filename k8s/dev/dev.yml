@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: rvlt-api
-        image: nginx
+        image: nginx:latest
         ports:
         - containerPort: 80
 
