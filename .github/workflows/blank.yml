@@ -34,3 +34,55 @@ jobs:
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
+    
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: dev-${{ github.sha }}
+      run: |
+        # Build a docker container and
+        # push it to ECR so that it can
+        # be deployed to EKS.
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+
+  deploy-eks:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    environment: dev
+ 
+    steps:
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        role-to-assume: arn:aws:iam::109715876520:role/github-actions-role
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+ 
+    - name: deploy to cluster
+      uses: kodermax/kubectl-aws-eks@master
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: "veritas-dev"
+        IMAGE_TAG: dev-${{ github.sha }}
+        KUBE_NAMESPACE: "rvlt-api"
+        CONTAINER_NAME: "rvlt-api"
+        KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA_DEV }} 
+        RELEASE_IMAGE: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.RELEASE_REVISION }}
+      with:                                                                                                         
+        args: set image deployment/rvlt-api $CONTAINER_NAME=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -n $KUBE_NAMESPACE
+        
+        
+        
+        
+        
+        
+        
